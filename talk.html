@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>String Art Generator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom file input styling */
+        input[type="file"]::file-selector-button {
+            background-color: #3b82f6; /* bg-blue-500 */
+            color: white;
+            border: 0;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem; /* rounded-md */
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        input[type="file"]::file-selector-button:hover {
+            background-color: #2563eb; /* bg-blue-600 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+
+    <div class="bg-white p-6 md:p-8 rounded-2xl shadow-xl w-full max-w-5xl">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">String Art Generator</h1>
+
+        <!-- Controls Section -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <!-- Left Column: Inputs -->
+            <div class="space-y-4">
+                <div>
+                    <label for="imageLoader" class="block text-sm font-medium text-gray-700 mb-2">1. 이미지 업로드</label>
+                    <input type="file" id="imageLoader" accept="image/*" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="pinsSlider" class="block text-sm font-medium text-gray-700">핀 개수: <span id="pinsValue" class="font-bold">200</span></label>
+                        <input id="pinsSlider" type="range" min="50" max="400" value="200" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                    </div>
+                    <div>
+                        <label for="linesSlider" class="block text-sm font-medium text-gray-700">라인 개수: <span id="linesValue" class="font-bold">3000</span></label>
+                        <input id="linesSlider" type="range" min="500" max="10000" value="3000" step="100" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="opacitySlider" class="block text-sm font-medium text-gray-700">라인 투명도: <span id="opacityValue" class="font-bold">0.1</span></label>
+                    <input id="opacitySlider" type="range" min="0.01" max="1" value="0.1" step="0.01" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                </div>
+
+                <button id="startButton" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md disabled:bg-gray-400" disabled>
+                    2. 생성 시작
+                </button>
+                <div id="loadingMessage" class="text-center text-blue-600 font-medium hidden">
+                    스트링 아트를 생성 중입니다...
+                </div>
+            </div>
+            
+            <!-- Right Column: Reset -->
+            <div class="space-y-4">
+                <p class="text-sm text-gray-600">
+                    이미지가 업로드되면 '생성 시작' 버튼이 활성화됩니다.<br>
+                    <strong>참고:</strong> 라인 개수가 많으면 생성에 몇 분 정도 소요될 수 있습니다.
+                </p>
+                <button id="resetButton" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-md">
+                    리셋
+                </button>
+                 <p class="text-xs text-gray-500">
+                    새로운 이미지를 업로드하거나 설정을 변경하려면 리셋 버튼을 누르세요.
+                </p>
+            </div>
+        </div>
+
+        <!-- Canvas Section -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-gray-200 pt-6">
+            <div>
+                <h2 class="text-lg font-semibold text-center text-gray-700 mb-2">원본 (그레이스케일)</h2>
+                <canvas id="previewCanvas" class="w-full h-auto aspect-square bg-gray-200 rounded-lg shadow-inner"></canvas>
+            </div>
+            <div>
+                <h2 class="text-lg font-semibold text-center text-gray-700 mb-2">스트링 아트 결과</h2>
+                <canvas id="stringArtCanvas" class="w-full h-auto aspect-square bg-white rounded-lg shadow-inner"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden canvas for processing -->
+    <canvas id="sourceCanvas" class="hidden"></canvas>
+
+    <script>
+        // --- DOM Elements ---
+        const imageLoader = document.getElementById('imageLoader');
+        const startButton = document.getElementById('startButton');
+        const resetButton = document.getElementById('resetButton');
+        const loadingMessage = document.getElementById('loadingMessage');
+        
+        const pinsSlider = document.getElementById('pinsSlider');
+        const linesSlider = document.getElementById('linesSlider');
+        const opacitySlider = document.getElementById('opacitySlider');
+        
+        const pinsValue = document.getElementById('pinsValue');
+        const linesValue = document.getElementById('linesValue');
+        const opacityValue = document.getElementById('opacityValue');
+        
+        const previewCanvas = document.getElementById('previewCanvas');
+        const stringArtCanvas = document.getElementById('stringArtCanvas');
+        const sourceCanvas = document.getElementById('sourceCanvas');
+        
+        const previewCtx = previewCanvas.getContext('2d');
+        const stringArtCtx = stringArtCanvas.getContext('2d');
+        const sourceCtx = sourceCanvas.getContext('2d');
+
+        const CANVAS_SIZE = 500; // Processing resolution
+        previewCanvas.width = previewCanvas.height = CANVAS_SIZE;
+        stringArtCanvas.width = stringArtCanvas.height = CANVAS_SIZE;
+        sourceCanvas.width = sourceCanvas.height = CANVAS_SIZE;
+
+        let originalImageData = null;
+        let greyscaleData = null; // This will store the residual image data
+        let pinCoords = [];
+        let isGenerating = false;
+        let animationFrameId = null;
+
+        // --- Event Listeners ---
+        
+        pinsSlider.oninput = () => { pinsValue.textContent = pinsSlider.value; };
+        linesSlider.oninput = () => { linesValue.textContent = linesSlider.value; };
+        opacitySlider.oninput = () => { opacityValue.textContent = opacitySlider.value; };
+
+        imageLoader.addEventListener('change', handleImageUpload);
+        startButton.addEventListener('click', startGeneration);
+        resetButton.addEventListener('click', resetApplication);
+
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    const size = Math.min(img.width, img.height);
+                    const x = (img.width - size) / 2;
+                    const y = (img.height - size) / 2;
+                    sourceCtx.drawImage(img, x, y, size, size, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
+                    
+                    const imageData = sourceCtx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+                    originalImageData = convertToGreyscale(imageData);
+                    
+                    drawGreyscaleToCanvas(originalImageData, previewCtx);
+                    
+                    startButton.disabled = false;
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function startGeneration() {
+            if (isGenerating || !originalImageData) return;
+            isGenerating = true;
+            startButton.disabled = true;
+            resetButton.disabled = true;
+            imageLoader.disabled = true;
+            loadingMessage.classList.remove('hidden');
+
+            stringArtCtx.fillStyle = 'white';
+            stringArtCtx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+            const numPins = parseInt(pinsSlider.value, 10);
+            const numLines = parseInt(linesSlider.value, 10);
+            const lineOpacity = parseFloat(opacitySlider.value);
+            
+            const lineWeight = 15; 
+
+            pinCoords = calculatePinCoords(numPins);
+            greyscaleData = new Uint8ClampedArray(originalImageData.data);
+
+            stringArtCtx.strokeStyle = `rgba(0, 0, 0, ${lineOpacity})`;
+            stringArtCtx.lineWidth = 1;
+
+            let currentPin = 0;
+            let currentLine = 0;
+
+            function drawStep() {
+                if (currentLine >= numLines || !isGenerating) {
+                    // --- 생성 완료 ---
+                    loadingMessage.classList.add('hidden');
+                    loadingMessage.textContent = "스트링 아트를 생성 중입니다...";
+                    resetButton.disabled = false;
+                    isGenerating = false;
+                    return;
+                }
+
+                // 진행 상황 업데이트
+                if (currentLine % 100 === 0) {
+                    loadingMessage.textContent = `생성 중... ${currentLine} / ${numLines} 라인`;
+                }
+
+                // --- 가장 적합한 다음 핀 찾기 ("탐욕적" 알고리즘) ---
+                let bestPin = -1;
+                let maxScore = -Infinity;
+                const p1 = pinCoords[currentPin];
+
+                for (let nextPin = 0; nextPin < numPins; nextPin++) {
+                    // 같은 핀이나 바로 인접한 핀은 건너뜀 (선택사항이지만 더 나은 결과를 위해)
+                    if (nextPin === currentPin || Math.abs(nextPin - currentPin) < 2) continue;
+
+                    const p2 = pinCoords[nextPin];
+                    const pixels = getLinePixels(p1.x, p1.y, p2.x, p2.y);
+                    let currentScore = 0;
+
+                    for (const p of pixels) {
+                        // 잔여 데이터에서 그레이스케일 값(어두움) 가져오기
+                        const index = (p.y * CANVAS_SIZE + p.x) * 4;
+                        // 점수는 어두움을 기반으로 함 (0 = 검정, 255 = 흰색)
+                        // 따라서 (255 - 값)은 어두운 픽셀에 높은 점수를 부여
+                        currentScore += (255 - greyscaleData[index]);
+                    }
+
+                    if (currentScore > maxScore) {
+                        maxScore = currentScore;
+                        bestPin = nextPin;
+                    }
+                }
+
+                // --- 가장 적합한 선을 그리고 업데이트 ---
+                if (bestPin !== -1) {
+                    const p2 = pinCoords[bestPin];
+
+                    // 1. 보이는 캔버스에 선 그리기
+                    stringArtCtx.beginPath();
+                    stringArtCtx.moveTo(p1.x, p1.y);
+                    stringArtCtx.lineTo(p2.x, p2.y);
+                    stringArtCtx.stroke();
+
+                    // 2. 잔여 그레이스케일 데이터 업데이트 (경로를 밝게 만듦)
+                    const pixelsToUpdate = getLinePixels(p1.x, p1.y, p2.x, p2.y);
+                    for (const p of pixelsToUpdate) {
+                        const index = (p.y * CANVAS_SIZE + p.x) * 4;
+                        // 잔여 맵에서 픽셀을 밝게 만듦
+                        const newValue = Math.min(255, greyscaleData[index] + lineWeight);
+                        greyscaleData[index] = newValue;
+                        greyscaleData[index + 1] = newValue;
+                        greyscaleData[index + 2] = newValue;
+                    }
+
+                    // 3. 새로운 핀으로 이동
+                    currentPin = bestPin;
+                } else {
+                    // 핀을 찾지 못한 경우를 위한 안전장치
+                    currentPin = (currentPin + 1) % numPins;
+                }
+
+                currentLine++;
+                animationFrameId = requestAnimationFrame(drawStep);
+            }
+
+            drawStep();
+        }
+
+        function resetApplication() {
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
+            isGenerating = false;
+            
+            // Clear canvases
+            previewCtx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+            stringArtCtx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+            sourceCtx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+            // Reset UI
+            imageLoader.value = "";
+            imageLoader.disabled = false;
+            startButton.disabled = true;
+            resetButton.disabled = false;
+            loadingMessage.classList.add('hidden');
+            loadingMessage.textContent = "스트링 아트를 생성 중입니다...";
+            
+            // Reset data
+            originalImageData = null;
+            greyscaleData = null;
+            pinCoords = [];
+        }
+
+        // --- Helper Functions ---
+
+        function convertToGreyscale(imageData) {
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                // Use the standard luminosity formula
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                const greyscale = 0.299 * r + 0.587 * g + 0.114 * b;
+                data[i] = greyscale;     // Red
+                data[i + 1] = greyscale; // Green
+                data[i + 2] = greyscale; // Blue
+                // data[i + 3] stays as alpha
+            }
+            return imageData;
+        }
+
+        function drawGreyscaleToCanvas(imageData, ctx) {
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        function calculatePinCoords(numPins) {
+            const coords = [];
+            const center = CANVAS_SIZE / 2;
+            const radius = CANVAS_SIZE / 2 - 5; // 5px padding
+            for (let i = 0; i < numPins; i++) {
+                const angle = (i / numPins) * 2 * Math.PI;
+                const x = Math.round(center + radius * Math.cos(angle));
+                const y = Math.round(center + radius * Math.sin(angle));
+                coords.push({ x, y });
+            }
+            return coords;
+        }
+
+        /**
+         * Gets all pixel coordinates on a line using DDA algorithm.
+         */
+        function getLinePixels(x0, y0, x1, y1) {
+            const pixels = [];
+            x0 = Math.round(x0);
+            y0 = Math.round(y0);
+            x1 = Math.round(x1);
+            y1 = Math.round(y1);
+
+            const dx = x1 - x0;
+            const dy = y1 - y0;
+            const steps = Math.max(Math.abs(dx), Math.abs(dy));
+            
+            if (steps === 0) {
+                 pixels.push({ x: x0, y: y0 });
+                 return pixels;
+            }
+
+            const xInc = dx / steps;
+            const yInc = dy / steps;
+
+            let x = x0;
+            let y = y0;
+
+            for (let i = 0; i <= steps; i++) {
+                const px = Math.round(x);
+                const py = Math.round(y);
+                // Ensure pixels are within bounds
+                if (px >= 0 && px < CANVAS_SIZE && py >= 0 && py < CANVAS_SIZE) {
+                    pixels.push({ x: px, y: py });
+                }
+                x += xInc;
+                y += yInc;
+            }
+            return pixels;
+        }
+
+    </script>
+</body>
+</html>
+
